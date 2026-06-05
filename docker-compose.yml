@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres-auth
+
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5434:5432"
+
+  auth-service:
+    build: .
+    container_name: auth-service
+
+    ports:
+      - "8092:8092"
+
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/auth_db"
+      SPRING_DATASOURCE_USERNAME: "postgres"
+      SPRING_DATASOURCE_PASSWORD: "postgres"
+
+    depends_on:
+      - postgres
