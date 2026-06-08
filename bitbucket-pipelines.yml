@@ -1,38 +1,27 @@
-image: maven:3.9.6-eclipse-temurin-21
+#  Template maven-build
+
+#  This template allows you to test and build your Java project with Maven.
+#  The workflow allows running tests, code checkstyle and security scans on the default branch.
+
+# Prerequisites: pom.xml and appropriate project structure should exist in the repository.
+
+image: maven:3.6.3
 
 pipelines:
-  branches:
-
-    develop:
+  default:
+    - parallel:
       - step:
-          name: Build DEV
-          deployment: Development
+          name: Build and Test
           caches:
             - maven
           script:
-            - mvn clean verify
-
-    uat:
-      - step:
-          name: Build UAT
-          deployment: UAT
-          caches:
-            - maven
-          script:
-            - mvn clean verify
-
-    main:
-      - step:
-          name: Build PROD
-          deployment: Production
-          caches:
-            - maven
-          script:
-            - mvn clean verify
-
+            - mvn -B verify --file pom.xml
+          after-script:
+              # Collect checkstyle results, if any, and convert to Bitbucket Code Insights.
+            - pipe: atlassian/checkstyle-report:0.3.0
       - step:
           name: Security Scan
-          image: python:3.11
           script:
-            - pip install semgrep
-            - semgrep scan --config auto .
+            # Run a security scan for sensitive data.
+            # See more security tools at https://bitbucket.org/product/features/pipelines/integrations?&category=security
+            - pipe: atlassian/git-secrets-scan:0.5.1
