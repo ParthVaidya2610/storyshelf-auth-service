@@ -1,38 +1,17 @@
 image: maven:3.9.6-eclipse-temurin-21
 
 pipelines:
-  branches:
+  default:
+    - step:
+        name: Build Test and Package
+        caches:
+          - maven
+        script:
+          - mvn clean verify
 
-    develop:
-      - step:
-          name: Build DEV
-          deployment: Development
-          caches:
-            - maven
-          script:
-            - mvn clean verify
-
-    uat:
-      - step:
-          name: Build UAT
-          deployment: UAT
-          caches:
-            - maven
-          script:
-            - mvn clean verify
-
-    main:
-      - step:
-          name: Build PROD
-          deployment: Production
-          caches:
-            - maven
-          script:
-            - mvn clean verify
-
-      - step:
-          name: Security Scan
-          image: python:3.11
-          script:
-            - pip install semgrep
-            - semgrep scan --config auto .
+    - step:
+        name: Security Scan
+        image: python:3.11
+        script:
+          - pip install semgrep
+          - semgrep scan --config auto .
