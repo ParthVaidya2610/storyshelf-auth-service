@@ -1,0 +1,17 @@
+image: maven:3.9.6-eclipse-temurin-21
+
+pipelines:
+  default:
+    - step:
+        name: Build Test and Package
+        caches:
+          - maven
+        script:
+          - mvn clean verify
+
+    - step:
+        name: Security Scan
+        image: python:3.11
+        script:
+          - pip install semgrep
+          - semgrep scan --config auto .
