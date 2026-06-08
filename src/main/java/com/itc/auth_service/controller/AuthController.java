@@ -1,6 +1,7 @@
 package com.itc.auth_service.controller;
 
 import com.itc.auth_service.dto.LoginRequest;
+import com.itc.auth_service.dto.RegisterRequest;
 import com.itc.auth_service.entity.User;
 import com.itc.auth_service.repository.UserRepository;
 import com.itc.auth_service.util.JwtUtil;
@@ -71,5 +72,34 @@ public class AuthController {
                         "role", role,
                         "accessToken", accessToken
                 ));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
+
+        if (userRepo.findByEmail(req.email()).isPresent()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Email already exists"));
+        }
+
+        User user = new User();
+        user.setFullName(req.fullName());
+        user.setEmail(req.email());
+        user.setPassword(passwordEncoder.encode(req.password()));
+
+        // Default role if none supplied
+        String role = (req.role() == null || req.role().isBlank())
+                ? "ROLE_USER"
+                : req.role();
+
+        user.setRole(role);
+
+        userRepo.save(user);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "User registered successfully",
+                "email", user.getEmail(),
+                "role", user.getRole()
+        ));
     }
 }
