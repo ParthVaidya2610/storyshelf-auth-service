@@ -1,16 +1,26 @@
 package com.itc.auth_service.controller;
 
 import com.itc.auth_service.dto.LoginRequest;
+import com.itc.auth_service.dto.RegisterRequest;
 import com.itc.auth_service.entity.User;
+import com.itc.auth_service.repository.RoleRepository;
 import com.itc.auth_service.repository.UserRepository;
 import com.itc.auth_service.util.JwtUtil;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import com.itc.auth_service.dto.RegisterResponse;
+import com.itc.auth_service.service.UserService;
 
 import java.util.Map;
 
@@ -20,31 +30,30 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String DEFAULT_ROLE = "ROLE_USER";
+    private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepo;
     private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest req,
                                    HttpServletResponse res) {
 
-        // 1️⃣ Find user
-        User user = userRepo.findByEmail(req.email())
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+        User user = userRepo.findByEmail(req.email()).orElse(null);
 
-        // 2️⃣ Validate password
-        if (!passwordEncoder.matches(req.password(), user.getPassword())) {
-            return ResponseEntity.status(401).body("Invalid email or password");
+        if (user == null ||
+                !passwordEncoder.matches(req.password(), user.getPassword())) {
+
+            return ResponseEntity.status(401)
+                    .body(Map.of("message", "Invalid email or password"));
         }
 
-        // ✅ THIS IS THE CORRECT LINE
-        String role = user.getRole(); // ROLE_ADMIN / ROLE_USER
-
-        // 3️⃣ Generate tokens
+        String role = user.getRole();
         String accessToken = jwtUtil.generateAccessToken(user.getEmail(), role);
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
-        // 4️⃣ Cookies
         ResponseCookie accessCookie = ResponseCookie.from("accessToken", accessToken)
                 .httpOnly(true)
                 .secure(false)
@@ -61,7 +70,6 @@ public class AuthController {
                 .maxAge(7 * 24 * 60 * 60)
                 .build();
 
-        // 5️⃣ Response
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
@@ -70,6 +78,20 @@ public class AuthController {
                         "email", user.getEmail(),
                         "role", role,
                         "accessToken", accessToken
+                ));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest req) {
+
+        User user = userService.registerUser(req);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new RegisterResponse(
+                        "User registered successfully",
+                        user.getEmail(),
+                        user.getRole()
                 ));
     }
 }
