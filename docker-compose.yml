@@ -1,27 +1,68 @@
 services:
+  # Optional local Postgres. Not started by default — the service talks to Neon.
+  # Bring it up explicitly with:  docker compose --profile local-db up
   postgres:
     image: postgres:17
     container_name: postgres-auth
+    profiles: ["local-db"]
 
     environment:
-      POSTGRES_DB: auth_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-auth_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # Left empty rather than `:?required` — compose interpolates inactive profiles
+      # too, so a required var here would break plain `docker compose up`. The
+      # postgres image itself errors clearly if you enable this profile unset.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
 
     ports:
-      - "5434:5432"
+      - "${POSTGRES_HOST_PORT:-5434}:5432"
+
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-auth_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   auth-service:
     build: .
     container_name: auth-service
+    restart: unless-stopped
 
     ports:
       - "8092:8092"
 
     environment:
-      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/auth_db"
-      SPRING_DATASOURCE_USERNAME: "postgres"
-      SPRING_DATASOURCE_PASSWORD: "postgres"
+      # Neon connection — values come from .env (untracked). See .env.example.
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?set SPRING_DATASOURCE_URL in .env}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?set SPRING_DATASOURCE_USERNAME in .env}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?set SPRING_DATASOURCE_PASSWORD in .env}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:-5}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:-0}
+      SPRING_DATASOURCE_HIKARI_MAX_LIFETIME: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:-300000}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT:-30000}
 
-    depends_on:
-      - postgres
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-file:/run/secrets/jwt-private.pem}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-file:/run/secrets/jwt-public.pem}
+
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-Strict}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3001}
+
+      LOGIN_MAX_FAILED_ATTEMPTS: ${LOGIN_MAX_FAILED_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_DURATION: ${LOGIN_LOCKOUT_DURATION:-PT15M}
+
+      PASSWORD_MIGRATION_ENABLED: ${PASSWORD_MIGRATION_ENABLED:-false}
+      PASSWORD_MIGRATION_DRY_RUN: ${PASSWORD_MIGRATION_DRY_RUN:-true}
+
+    volumes:
+      - ./docker/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
+      - ./docker/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro
+
+volumes:
+  postgres-auth-data:

@@ -1,83 +1,66 @@
 package com.itc.auth_service.controller;
 
+import com.itc.auth_service.config.AuthCookieFactory;
 import com.itc.auth_service.dto.LoginRequest;
 import com.itc.auth_service.dto.RegisterRequest;
+import com.itc.auth_service.dto.RegisterResponse;
 import com.itc.auth_service.entity.User;
-import com.itc.auth_service.repository.RoleRepository;
-import com.itc.auth_service.repository.UserRepository;
+import com.itc.auth_service.service.LoginAttemptService;
+import com.itc.auth_service.service.UserService;
 import com.itc.auth_service.util.JwtUtil;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.itc.auth_service.dto.RegisterResponse;
-import com.itc.auth_service.service.UserService;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:3001", allowCredentials = "true")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private static final String DEFAULT_ROLE = "ROLE_USER";
-    private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepo;
-    private final PasswordEncoder passwordEncoder;
     private final UserService userService;
+    private final LoginAttemptService loginAttemptService;
+    private final AuthCookieFactory cookieFactory;
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req,
-                                   HttpServletResponse res) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
 
-        User user = userRepo.findByEmail(req.email()).orElse(null);
+        LoginAttemptService.AuthOutcome outcome =
+                loginAttemptService.authenticate(req.email(), req.password());
 
-        if (user == null ||
-                !passwordEncoder.matches(req.password(), user.getPassword())) {
-
-            return ResponseEntity.status(401)
+        if (!outcome.isSuccess()) {
+            // One message for every failure mode. Saying "account locked" here would tell
+            // an attacker the email is registered and that they reached the threshold.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "Invalid email or password"));
         }
 
+        User user = outcome.user();
         String role = user.getRole();
+
         String accessToken = jwtUtil.generateAccessToken(user.getEmail(), role);
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
-        ResponseCookie accessCookie = ResponseCookie.from("accessToken", accessToken)
-                .httpOnly(true)
-                .secure(false)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(15 * 60)
-                .build();
-
-        ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", refreshToken)
-                .httpOnly(true)
-                .secure(false)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(7 * 24 * 60 * 60)
-                .build();
-
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE,
+                        cookieFactory.accessToken(accessToken, jwtUtil.getAccessTokenExpiration()).toString())
+                .header(HttpHeaders.SET_COOKIE,
+                        cookieFactory.refreshToken(refreshToken, jwtUtil.getRefreshTokenExpiration()).toString())
+                // The tokens are deliberately absent from the body. Returning the access
+                // token here defeated the httpOnly cookie: the browser could read it, so
+                // it ended up in localStorage where any XSS can exfiltrate it.
                 .body(Map.of(
                         "message", "Login successful",
                         "email", user.getEmail(),
-                        "role", role,
-                        "accessToken", accessToken
+                        "role", role
                 ));
     }
 
@@ -93,5 +76,18 @@ public class AuthController {
                         user.getEmail(),
                         user.getRole()
                 ));
+    }
+
+    /**
+     * Clears the auth cookies. The tokens themselves stay valid until they expire —
+     * there is no server-side revocation yet — but the browser stops presenting them.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout() {
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookieFactory.expireAccessToken().toString())
+                .header(HttpHeaders.SET_COOKIE, cookieFactory.expireRefreshToken().toString())
+                .body(Map.of("message", "Logged out"));
     }
 }

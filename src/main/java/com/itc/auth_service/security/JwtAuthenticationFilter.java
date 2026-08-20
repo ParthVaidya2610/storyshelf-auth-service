@@ -29,9 +29,12 @@
 
             String path = request.getServletPath();
 
+            // refresh-token was listed here but no such endpoint exists; skipping a
+            // route that does not exist only makes it easier to add one later that
+            // silently bypasses the filter.
             return path.startsWith("/api/auth/login")
                     || path.startsWith("/api/auth/register")
-                    || path.startsWith("/api/auth/refresh-token")
+                    || path.startsWith("/api/auth/logout")
                     || request.getMethod().equalsIgnoreCase("OPTIONS");
         }
 
@@ -50,6 +53,17 @@
                     String email = claims.getSubject();
                     String role = claims.get("role", String.class);
 
+                    // Refresh tokens are signed by the same key and carry no role claim,
+                    // so they parse cleanly here. Previously the only thing stopping one
+                    // being used as an access token was SimpleGrantedAuthority throwing
+                    // on a null argument and landing in the catch below — an accident,
+                    // not a control. Reject explicitly instead.
+                    if (email == null || email.isBlank() || role == null || role.isBlank()) {
+                        SecurityContextHolder.clearContext();
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(
                                     email,
@@ -60,6 +74,8 @@
                     SecurityContextHolder.getContext().setAuthentication(auth);
 
                 } catch (Exception e) {
+                    // Expired or tampered token: proceed unauthenticated and let the
+                    // authorization rules produce the 401.
                     SecurityContextHolder.clearContext();
                 }
             }

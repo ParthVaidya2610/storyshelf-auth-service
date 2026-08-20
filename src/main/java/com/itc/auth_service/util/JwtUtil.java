@@ -2,7 +2,6 @@ package com.itc.auth_service.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -14,6 +13,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
 
@@ -29,8 +29,22 @@ public class JwtUtil {
     private PrivateKey privateKey;
     private PublicKey publicKey;
 
-    private static final long ACCESS_EXP = 15 * 60 * 1000;          // 15 min
-    private static final long REFRESH_EXP = 7 * 24 * 60 * 60 * 1000L; // 7 days
+    // Configurable rather than compile-time constants, and exposed via the accessors
+    // below so the auth cookies' max-age cannot drift out of step with the token's
+    // own expiry claim.
+    @Value("${jwt.access-token-expiration:PT15M}")
+    private Duration accessTokenExpiration;
+
+    @Value("${jwt.refresh-token-expiration:P7D}")
+    private Duration refreshTokenExpiration;
+
+    public Duration getAccessTokenExpiration() {
+        return accessTokenExpiration;
+    }
+
+    public Duration getRefreshTokenExpiration() {
+        return refreshTokenExpiration;
+    }
 
     @PostConstruct
     public void loadKeys() {
@@ -71,11 +85,11 @@ public class JwtUtil {
     // =============================
     public String generateAccessToken(String email, String role) {
         return Jwts.builder()
-                .setSubject(email)
+                .subject(email)
                 .claim("role", role)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_EXP))
-                .signWith(privateKey, SignatureAlgorithm.RS384)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration.toMillis()))
+                .signWith(privateKey, Jwts.SIG.RS384)
                 .compact();
     }
 
@@ -84,10 +98,10 @@ public class JwtUtil {
     // =============================
     public String generateRefreshToken(String email) {
         return Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_EXP))
-                .signWith(privateKey, SignatureAlgorithm.RS384)
+                .subject(email)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration.toMillis()))
+                .signWith(privateKey, Jwts.SIG.RS384)
                 .compact();
     }
 
@@ -95,10 +109,10 @@ public class JwtUtil {
     // VALIDATION
     // =============================
     public Claims extractClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(publicKey)
+        return Jwts.parser()
+                .verifyWith(publicKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }
