@@ -1,6 +1,7 @@
 package com.itc.auth_service.service.impl;
 
 import com.itc.auth_service.entity.User;
+import com.itc.auth_service.entity.UserRole;
 import com.itc.auth_service.repository.UserRepository;
 import com.itc.auth_service.service.LoginAttemptService.AuthOutcome;
 import com.itc.auth_service.service.LoginAttemptService.Status;
@@ -47,7 +48,7 @@ class LoginAttemptServiceImplTest {
         user.setId(1L);
         user.setEmail(EMAIL);
         user.setPassword(new BCryptPasswordEncoder(4).encode(PASSWORD));
-        user.setRole("ROLE_USER");
+        user.setRole(UserRole.ROLE_USER);
         return user;
     }
 

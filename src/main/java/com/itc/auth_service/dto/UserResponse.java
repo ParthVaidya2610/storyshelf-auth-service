@@ -18,7 +18,7 @@ public record UserResponse(
                 user.getId(),
                 user.getFullName(),
                 user.getEmail(),
-                user.getRole(),
+                user.getRole().name(),
                 user.getFailedAttempts(),
                 user.isAccountLocked(),
                 user.getLockTime()

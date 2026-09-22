@@ -1,6 +1,7 @@
 package com.itc.auth_service.migration;
 
 import com.itc.auth_service.entity.User;
+import com.itc.auth_service.entity.UserRole;
 import com.itc.auth_service.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class PasswordMigrationRunnerTest {
         user.setId(id);
         user.setEmail("u" + id + "@example.com");
         user.setPassword(password);
-        user.setRole("ROLE_USER");
+        user.setRole(UserRole.ROLE_USER);
         return user;
     }
 

@@ -2,6 +2,7 @@ package com.itc.auth_service.service.impl;
 
 import com.itc.auth_service.dto.RegisterRequest;
 import com.itc.auth_service.entity.User;
+import com.itc.auth_service.entity.UserRole;
 import com.itc.auth_service.repository.UserRepository;
 import com.itc.auth_service.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +18,6 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
 
     private static final String ROLE_PREFIX = "ROLE_";
-    private static final String ROLE_ADMIN = "ROLE_ADMIN";
-    private static final String ROLE_USER = "ROLE_USER";
-    private static final String ROLE_MANAGER = "ROLE_MANAGER";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -37,7 +35,7 @@ public class UserServiceImpl implements UserService {
         user.setFullName(request.fullName());
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
-        user.setRole(ROLE_USER);
+        user.setRole(UserRole.ROLE_USER);
 
         return userRepository.save(user);
     }
@@ -86,9 +84,9 @@ public class UserServiceImpl implements UserService {
         userRepository.deleteById(id);
     }
 
-    private String resolveRole(String role) {
+    private UserRole resolveRole(String role) {
         if (role == null || role.isBlank()) {
-            return ROLE_USER;
+            return UserRole.ROLE_USER;
         }
 
         String normalizedRole = role.trim().toUpperCase();
@@ -96,13 +94,10 @@ public class UserServiceImpl implements UserService {
             normalizedRole = ROLE_PREFIX + normalizedRole;
         }
 
-        if (!ROLE_USER.equals(normalizedRole)
-                && !ROLE_ADMIN.equals(normalizedRole)
-                && !ROLE_MANAGER.equals(normalizedRole)) {
-
+        try {
+            return UserRole.valueOf(normalizedRole);
+        } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unsupported role: " + role);
         }
-
-        return normalizedRole;
     }
 }

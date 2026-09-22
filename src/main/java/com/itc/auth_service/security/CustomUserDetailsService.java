@@ -1,6 +1,7 @@
     package com.itc.auth_service.security;
 
     import com.itc.auth_service.entity.User;
+    import com.itc.auth_service.entity.UserRole;
     import com.itc.auth_service.repository.UserRepository;
     import lombok.RequiredArgsConstructor;
     import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,21 +26,16 @@
                     .orElseThrow(() ->
                             new UsernameNotFoundException("User not found: " + email));
 
-            String roleName = user.getRole();
+            UserRole role = user.getRole();
 
-            if (roleName == null || roleName.isBlank()) {
+            if (role == null) {
                 throw new IllegalStateException("User role is missing for: " + email);
-            }
-
-            // ✅ Ensure ROLE_ prefix
-            if (!roleName.startsWith("ROLE_")) {
-                roleName = "ROLE_" + roleName;
             }
 
             return org.springframework.security.core.userdetails.User
                     .withUsername(user.getEmail())
                     .password(user.getPassword())
-                    .authorities(List.of(new SimpleGrantedAuthority(roleName)))
+                    .authorities(List.of(new SimpleGrantedAuthority(role.name())))
                     .build();
         }
 

@@ -1,11 +1,15 @@
 package com.itc.auth_service.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
@@ -21,9 +25,9 @@ public class User {
 
     private String password;
 
-    // 🔥 FIX: STRING ROLE (NOT ENTITY)
-    @Column(nullable = false)
-    private String role;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private UserRole role = UserRole.ROLE_USER;
 
     private int failedAttempts;
     private boolean accountLocked;

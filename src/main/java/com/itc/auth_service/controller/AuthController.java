@@ -44,7 +44,7 @@ public class AuthController {
         }
 
         User user = outcome.user();
-        String role = user.getRole();
+        String role = user.getRole().name();
 
         String accessToken = jwtUtil.generateAccessToken(user.getEmail(), role);
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
@@ -74,7 +74,7 @@ public class AuthController {
                 .body(new RegisterResponse(
                         "User registered successfully",
                         user.getEmail(),
-                        user.getRole()
+                        user.getRole().name()
                 ));
     }
 
